@@ -12,6 +12,10 @@ import { escape } from '@microsoft/sp-lodash-subset';
 
 import styles from './HelloworldWebPart.module.scss';
 import * as strings from 'HelloworldWebPartStrings';
+import {
+  SPHttpClient,
+  SPHttpClientResponse
+} from '@microsoft/sp-http';
 
 export interface IHelloworldWebPartProps {
   description: string;
@@ -19,6 +23,15 @@ export interface IHelloworldWebPartProps {
   test1: boolean;
   test2: string;
   test3: boolean;
+}
+
+export interface ISPLists {
+  value: ISPList[];
+}
+
+export interface ISPList {
+  Title: string;
+  Id: string;
 }
 
 export default class HelloworldWebPart extends BaseClientSideWebPart<IHelloworldWebPartProps> {
@@ -33,29 +46,49 @@ export default class HelloworldWebPart extends BaseClientSideWebPart<IHelloworld
         <img alt="" src="${this._isDarkTheme ? require('./assets/welcome-dark.png') : require('./assets/welcome-light.png')}" class="${styles.welcomeImage}" />
         <h2>Well done, ${escape(this.context.pageContext.user.displayName)}!</h2>
         <div>${this._environmentMessage}</div>
-        <div>Web part property value: <strong>${escape(this.properties.description)}</strong></div>
-        <p>${this.properties.test}</p>
-        <p>${this.properties.test1}</p>
-        <p>${this.properties.test2}</p>
-        <p>${this.properties.test3}</p>
       </div>
       <div>
         <h3>Welcome to SharePoint Framework!</h3>
-        <p>
-        The SharePoint Framework (SPFx) is a extensibility model for Microsoft Viva, Microsoft Teams and SharePoint. It's the easiest way to extend Microsoft 365 with automatic Single Sign On, automatic hosting and industry standard tooling.
-        </p>
-        <h4>Learn more about SPFx development:</h4>
-          <ul class="${styles.links}">
-            <li><a href="https://aka.ms/spfx" target="_blank">SharePoint Framework Overview</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-graph" target="_blank">Use Microsoft Graph in your solution</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-teams" target="_blank">Build for Microsoft Teams using SharePoint Framework</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-viva" target="_blank">Build for Microsoft Viva Connections using SharePoint Framework</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-store" target="_blank">Publish SharePoint Framework applications to the marketplace</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-api" target="_blank">SharePoint Framework API reference</a></li>
-            <li><a href="https://aka.ms/m365pnp" target="_blank">Microsoft 365 Developer Community</a></li>
-          </ul>
+        <div>Web part description: <strong>${escape(this.properties.description)}</strong></div>
+        <div>Web part test: <strong>${escape(this.properties.test)}</strong></div>
+        <div>Loading from: <strong>${escape(this.context.pageContext.web.title)}</strong></div>
       </div>
+      <div id="spListContainer" />
     </section>`;
+
+    this._renderListAsync();
+  }
+
+  private _getListData(): Promise<ISPLists> {
+    return this.context.spHttpClient.get(`${this.context.pageContext.web.absoluteUrl}/_api/web/lists?$filter=Hidden eq false`, SPHttpClient.configurations.v1)
+      .then((response: SPHttpClientResponse) => {
+        return response.json();
+      })
+      .catch(() => { });
+  }
+
+  private _renderList(items: ISPList[]): void {
+    let html: string = '';
+    items.forEach((item: ISPList) => {
+      html += `
+    <ul class="${styles.list}">
+      <li class="${styles.listItem}">
+        <span class="ms-font-l">${item.Title}</span>
+      </li>
+    </ul>`;
+    });
+
+    if (this.domElement.querySelector('#spListContainer') != null) {
+      this.domElement.querySelector('#spListContainer')!.innerHTML = html;
+    }
+  }
+
+  private _renderListAsync(): void {
+    this._getListData()
+      .then((response) => {
+        this._renderList(response.value);
+      })
+      .catch(() => { });
   }
 
   protected onInit(): Promise<void> {
@@ -63,8 +96,6 @@ export default class HelloworldWebPart extends BaseClientSideWebPart<IHelloworld
       this._environmentMessage = message;
     });
   }
-
-
 
   private _getEnvironmentMessage(): Promise<string> {
     if (!!this.context.sdks.microsoftTeams) { // running in Teams, office.com or Outlook
